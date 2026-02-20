@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Tornado Operations Console</title>
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0b0f14;
+    color: white;
+}
+#toolbar {
+    background: #111821;
+    padding: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+select, button {
+    padding: 6px;
+    background: #1b2530;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button.active {
+    background: #c40000;
+}
+canvas {
+    display: block;
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+<select id="mapSelect"></select>
+
+<button onclick="setMode('rotation')">Rotation</button>
+<button onclick="setMode('tornado')">Tornado</button>
+<button onclick="setMode('movement')">Movement Path</button>
+<button onclick="endTornado()">End Tornado</button>
+
+<select id="damageScale">
+<option value="green">Damage - Mild</option>
+<option value="yellow">Damage - Moderate</option>
+<option value="red">Damage - Large</option>
+<option value="black">Damage - Catastrophic</option>
+</select>
+<button onclick="setMode('damage')">Damage</button>
+
+<button onclick="clearMap()">Clear</button>
+</div>
+
+<canvas id="mapCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("mapCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight - 60;
+
+let currentMode = null;
+let currentMapImage = new Image();
+
+let tornadoActive = false;
+let tornadoIcon = null;
+let tornadoPath = [];
+let endedTornadoes = [];
+let rotations = [];
+let damages = [];
+
+const maps = [
+    {name: "Map 1", src: "map1.png"},
+    {name: "Map 2", src: "map2.png"}
+];
+
+const mapSelect = document.getElementById("mapSelect");
+
+maps.forEach((map, index) => {
+    let option = document.createElement("option");
+    option.value = index;
+    option.textContent = map.name;
+    mapSelect.appendChild(option);
+});
+
+mapSelect.addEventListener("change", function() {
+    loadMap(maps[this.value].src);
+});
+
+function loadMap(src) {
+    currentMapImage.src = src;
+}
+
+currentMapImage.onload = function() {
+    redraw();
+};
+
+loadMap(maps[0].src);
+
+function setMode(mode) {
+    currentMode = mode;
+}
+
+canvas.addEventListener("click", function(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (currentMode === "rotation") {
+        rotations.push({x, y});
+    }
+
+    if (currentMode === "tornado") {
+        tornadoActive = true;
+        tornadoIcon = {x, y, color: "lime"};
+        tornadoPath = [{x, y}];
+    }
+
+    if (currentMode === "movement" && tornadoActive) {
+        tornadoPath.push({x, y});
+        tornadoIcon = {x, y, color: "lime"};
+    }
+
+    if (currentMode === "damage") {
+        const scale = document.getElementById("damageScale").value;
+        damages.push({x, y, scale});
+    }
+
+    redraw();
+});
+
+function drawRotationIcon(x, y) {
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0.5, Math.PI * 1.8);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y - 10);
+    ctx.lineTo(x + 18, y - 12);
+    ctx.lineTo(x + 14, y - 4);
+    ctx.fillStyle = "lime";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 14, Math.PI * 1.1, Math.PI * 2.5);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x - 10, y + 10);
+    ctx.lineTo(x - 18, y + 12);
+    ctx.lineTo(x - 14, y + 4);
+    ctx.fill();
+}
+
+function drawTornadoIcon(x, y, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 18);
+    ctx.lineTo(x - 14, y - 12);
+    ctx.lineTo(x + 14, y - 12);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawDamageIcon(x, y, scale) {
+    ctx.fillStyle = scale;
+    ctx.fillRect(x - 8, y - 8, 16, 16);
+}
+
+function endTornado() {
+    if (tornadoIcon) {
+        endedTornadoes.push({x: tornadoIcon.x, y: tornadoIcon.y});
+        tornadoActive = false;
+        tornadoIcon = null;
+    }
+    redraw();
+}
+
+function clearMap() {
+    tornadoActive = false;
+    tornadoIcon = null;
+    tornadoPath = [];
+    endedTornadoes = [];
+    rotations = [];
+    damages = [];
+    redraw();
+}
+
+function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(currentMapImage, 0, 0, canvas.width, canvas.height);
+
+    if (tornadoPath.length > 1) {
+        ctx.strokeStyle = "lime";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(tornadoPath[0].x, tornadoPath[0].y);
+        for (let i = 1; i < tornadoPath.length; i++) {
+            ctx.lineTo(tornadoPath[i].x, tornadoPath[i].y);
+        }
+        ctx.stroke();
+    }
+
+    if (tornadoIcon) {
+        drawTornadoIcon(tornadoIcon.x, tornadoIcon.y, "lime");
+    }
+
+    endedTornadoes.forEach(t => {
+        drawTornadoIcon(t.x, t.y, "red");
+    });
+
+    rotations.forEach(r => {
+        drawRotationIcon(r.x, r.y);
+    });
+
+    damages.forEach(d => {
+        drawDamageIcon(d.x, d.y, d.scale);
+    });
+}
+</script>
+
+</body>
+</html>
